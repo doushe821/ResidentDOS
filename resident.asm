@@ -14,7 +14,7 @@ main:
         mov bx, 9h*4 
 
         mov ax, es:[bx]   ; int 16h:0h - взять нажатый символ 
-        mov old09ofs, ax
+        mov old09ofs, ax  ;
         mov ax, es:[bx+2] ; old ISR: C1:19A4
         mov old09seg, ax  ;
 
@@ -41,11 +41,14 @@ main:
 
 
         ; experimental
-        mov ax, es:[bx]
-        mov new08ofs, ax 
-        mov ax, es:[bx+2]
-        mov new08seg, ax 
+        ;mov ax, es:[bx]
+        ;mov new08ofs, ax 
+        ;mov ax, es:[bx+2]
+        ;mov new08seg, ax 
         ; experimental
+
+        mov new08ofs, offset ChainOldISR08
+        mov new08seg, cs
 
 
         xor ax, ax 
@@ -64,29 +67,45 @@ main:
         shr dx, 4
         inc dx
         int 21h
-        
-ChainOldISR08:
-                 db 0eah ; jmp
-        old08ofs dw 0
-        old08seg dw 0
-
-ChainOldISR09:
-
-                 db 0eah ; jmp
-        old09ofs dw 0
-        old09seg dw 0
-
-NewISR08:
-                 db 0eah ; jmp
-        new08ofs dw 0 
-        new08seg dw 0
 
         
 
 New08 proc 
+
+        push es 
+        push di 
+        mov di, VIDEOSEG
+        mov es, di
+        xor di, di 
+        mov byte ptr es:[di], '!'
+
+        pop di 
+        pop es
+
+        jmp ChainNewISR08
+endp
+
+
+New08body:
+
+        push es 
+        push di 
+        mov di, VIDEOSEG
+        mov es, di
+        xor di, di 
+        mov byte ptr es:[di+6], '!'
+        pop di 
+        pop es
+
         push dx
         push cx
-        push bx 
+        push bx         ; debug
+        push dx 
+        mov dx, offset New08body
+        mov ah, 2h
+        int 21h 
+        pop dx
+        ; debug
         push ax 
         push di
         push es 
@@ -131,8 +150,6 @@ llPrintingRegisters:
         mov al, byte ptr cs:[bx]
         stosw 
 
-        
-
 
         ; regname
         push bx
@@ -163,7 +180,6 @@ llPrintingRegisters:
         
 
         ; regval
-
         mov al, '0'
         stosw 
         stosw 
@@ -209,14 +225,7 @@ loop llBotInline
         pop dx
 
         jmp ChainOldISR08
-endp
 
-New08body proc 
-
-
-        jmp ChainOldISR08
-
-endp 
 
 
 New09 proc
@@ -227,10 +236,10 @@ New09 proc
 
         in al, 60h              ; input from keyboard (port 60)
         
-        cmp al, 36h
+        cmp al, 36h             ; SHIFT(R)
         je llTableOn
-        ;stosw                   ; ax -> es:di (SIGMA word) ((skibidi))
 
+        ;stosw                   ; ax -> es:di (SIGMA word) ((skibidi))
 
         ;in al, 61h
         ;mov ah, al 
@@ -245,8 +254,51 @@ New09 proc
 
 llTableOn: 
 
+        mov new08ofs, offset New08body
+        ;mov new08seg, cs
+
+        pop ax  
+
+        jmp ChainOldISR09
 
 endp 
+
+
+ChainOldISR08:
+        push es 
+        push di 
+        mov di, VIDEOSEG
+        mov es, di
+        xor di, di 
+        mov byte ptr es:[di+4], ' '
+
+        pop di 
+        pop es
+
+                 db 0eah ; jmp
+        old08ofs dw 0
+        old08seg dw 0
+
+ChainNewISR08:
+        push es 
+        push di 
+        mov di, VIDEOSEG
+        mov es, di
+        xor di, di 
+        mov byte ptr es:[di+4], '!'
+
+        pop di 
+        pop es
+
+
+                 db 0eah ; jmp
+        new08ofs dw 0 
+        new08seg dw 0
+
+ChainOldISR09:
+                 db 0eah ; jmp
+        old09ofs dw 0
+        old09seg dw 0
 
 
 FramePosition dw 5*50h*2+5ah
