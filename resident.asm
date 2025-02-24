@@ -6,14 +6,22 @@ VIDEOSEG equ 0b800h
 
 locals ll 
 
+;/// PROGRAM ///
+; IMPORTANT: This is a residental program that uses interruptions 08h and 09h, port 60h.
+; Program draws a table with registers values at the current moment. Table refreshes with timer (each 55 ms). To test the program, you can run test.com.
+; CONTROLS: SHIFT(L)+SHIFT(R) - toggle table's visibility. 
+;           CTRL+(ArrowUp/ArrowDown/ArrowLeft/ArrowRight) - move table around.
+;
+;/// START /// 
+
 main:
 
-        ; Saving old int 9h function
+        ; Saving old int 09h functions in program memory 
         xor bx, bx 
         mov es, bx 
         mov bx, 9h*4 
 
-        mov ax, es:[bx]   ; int 16h:0h - взять нажатый символ 
+        mov ax, es:[bx]   ; 
         mov old09ofs, ax  ;
         mov ax, es:[bx+2] ; old ISR: C1:19A4
         mov old09seg, ax  ;
@@ -25,7 +33,7 @@ main:
         mov es:[bx+2], ax
         sti
 
-        ; Saving old int 8h function
+        ; Saving old int 08h function
         xor bx, bx 
         mov es, bx 
         mov bx, 8h*4 
@@ -34,14 +42,6 @@ main:
         mov old08ofs, ax 
         mov ax, es:[bx+2]
         mov old08seg, ax 
-
-
-        ; experimental
-        ;mov ax, es:[bx]
-        ;mov new08ofs, ax 
-        ;mov ax, es:[bx+2]
-        ;mov new08seg, ax 
-        ; experimental
 
         mov new08ofs, offset ChainOldISR08
         mov new08seg, cs
@@ -53,6 +53,8 @@ main:
         mov es:[bx+2], ax
         sti
 
+
+        ; Making program residental (saving it in memory).
         mov ax, 3100h
         mov dx, offset ResidentProgramEnd
         shr dx, 4
@@ -60,21 +62,25 @@ main:
         int 21h
 
         
+;/// FUNCTION ///      
+; This is not an ordinary function, it calls a byte-defined jump which goes to old 08h interrupt handler if ToggleSequence is 0h,
+; or to New08body (program's handler) if ToggleSequence is set to 3h (which are respectivly 00000000b and 00000011b).
+;/// START ///
 
 New08 proc 
-
-        ;push es 
-        ;push di 
-        ;mov di, VIDEOSEG
-        ;mov es, di
-        ;xor di, di 
-        ;mov byte ptr es:[di], '!'
-        ;pop di 
-        ;pop es
-
         jmp ChainNewISR08
 endp
 
+;/// END ///
+
+
+;/// FUNCTION ///   
+; Despite it being a label, that's a function which handles 08h (timer system interruptions which occurs every 55ms).
+; It paints a table with registers' values in the videomemory.
+;       ENTRY: none 
+;       EXIT : none 
+;       DESTR: none
+;/// START ///      
 
 New08body:
 
@@ -225,12 +231,14 @@ loop llBotInline
 
         jmp ChainOldISR08
 
+;/// END ///
+
 
 ;/// FUNCTION ///
-;
-; Entry: AX, DI 
-;
-; Destr: ax, dx
+; It converts AX value to a HEX number and writes it to cs:[di].
+; Entry: AX - number to convert.
+;        DI - offset in CS.
+; Destr: AX, DX - just used in process of converting. DI - iincreased by 4h
 ;/// START ///
 
 
@@ -271,10 +279,16 @@ llPrintLit:
         jmp llBack
 endp
 
-
 ;/// END ///
 
 
+;/// FUNCTION ///      
+; This is program's 09h system interruption handler.
+; It is used to detect scan codes of the control keys for the table. 
+;       ENTRY: none 
+;       EXIT : none 
+;       DESTR: none
+;/// START ///
 New09 proc
 
         push ax
@@ -388,7 +402,6 @@ llToggleTable:
 
         mov di, cs:[FramePosition]
         mov cs:[new08ofs], offset New08body
-        ;mov cs:[new08seg], cs
 
         pop ax  
 
@@ -397,7 +410,6 @@ llToggleTable:
 llTableOn:
 
         mov cs:[new08ofs], offset ChainOldISR08
-        ;call PaintItBlack 
         pop ax 
 
         call RestoreBG
@@ -406,7 +418,7 @@ llTableOn:
 
 endp 
 
-RestoreBG proc ; TODOOOOOOOOOOo
+RestoreBG proc ; done
 
         push bx 
         push es 
@@ -450,9 +462,17 @@ loop llBGwholeLoop
 
 ret 
 endp 
+;/// END ///
 
+
+;/// FUNCTION ///      
+; This function saves fragment of video memory that is going to be occupied by the table. (Basically saves old background so it can be restored when 
+; user toggles of the table).
+;       ENTRY: none
+;       EXIT : none
+;       DESTR: none
+;/// START ///
 SaveOldBG proc 
-        ; SAVING OLD SCENERY: 
 
         push si
         push cx
@@ -488,41 +508,60 @@ loop llBGwholeLoop
         pop cx 
         pop si
 
-        ; old BG saved
-
 ret
 endp 
+;/// END ///
 
+;/// Byte-define jumps: ///
 ChainOldISR08:
 
-                 db 0eah ; jmp
+                 db 0eah ; jmp code
         old08ofs dw 0
         old08seg dw 0
 
 ChainNewISR08:
 
-                 db 0eah ; jmp
+                 db 0eah ; jmp code
         new08ofs dw 0 
         new08seg dw 0
 
 ChainOldISR09:
-                 db 0eah ; jmp
+                 db 0eah ; jmp code
         old09ofs dw 0
         old09seg dw 0
+;//////////////////////////
 
 
-FramePosition dw 3*50h*2+86h
 
-FrameStyle db '/-\| |\_/Z'
 
-LineLength equ 0Bh
+;/// CONSTANTS ///
+LineLength equ 0Bh ; length of a single line of the table
 
-NextLine   equ 86h
+NextLine   equ 86h ; needed offset for skipping whole line from the end of the last.
 
-HexDigitBitMask equ 00001111b
+HexDigitBitMask equ 00001111b ; used for number converting, separates half-bytes of the number.
 
-RegistersNumber equ 0Dh
+RegistersNumber equ 0Dh ; number of registers in table.
 
+; Scan-codes: 
+RSHIFT  equ 36h 
+LSHIFT  equ 2ah
+CTRL    equ 1dh
+CTRLrel equ 9dh
+
+ARROWUP    equ 48h 
+ARROWRIGHT equ 4dh
+ARROWLEFT  equ 4bh
+ARROWDOWN  equ 50h
+;/////////////////
+
+
+;/// VARIABLES ///
+FramePosition dw 3*50h*2+86h ; offset to video segment of top left corner of the table
+
+FrameStyle db '/-\| |\_/Z' ; Frame style for the table, last byte is coloring scheme
+
+; Registers' values:
 AXval dw 0h 
 BXval dw 0h 
 CXval dw 0h 
@@ -537,28 +576,14 @@ SIval dw 0h
 DIval dw 0h 
 IPval dw 0h
 
-; Scan-codes: 
-RSHIFT  equ 36h 
-LSHIFT  equ 2ah
-CTRL    equ 1dh
-CTRLrel equ 9dh
+ToggleSequence db 0h ; Flag for toggling table
 
-ARROWUP    equ 48h 
-ARROWRIGHT equ 4dh
-ARROWLEFT  equ 4bh
-ARROWDOWN  equ 50h
+ToggleMovement db 0h ; Flag for moving table
 
-ToggleSequence db 0h
+Registers db 'AX = 0000 BX = 0000 CX = 0000 DX = 0000 CS = 0000 DS = 0000 ES = 0000 SS = 0000 SP = 0000 BP = 0000 SI = 0000 DI = 0000 IP = 0000' ; mold for table
 
-ToggleMovement db 0h
-
-Registers db 'AX = 0000 BX = 0000 CX = 0000 DX = 0000 CS = 0000 DS = 0000 ES = 0000 SS = 0000 SP = 0000 BP = 0000 SI = 0000 DI = 0000 IP = 0000'
-
-BackGround db 13*2*15*2 dup(0)
-
+BackGround db 13*2*15*2 dup(0) ; reserving memory for old background
+;/////////////////
 
 ResidentProgramEnd:
 end main
-
-
-
