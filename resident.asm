@@ -130,35 +130,6 @@ loop llPrintValues
         mov di, VIDEOSEG
         mov es, di 
         mov di, cs:[FramePosition]
-
-
-        ; SAVING OLD SCENERY: 
-
-        mov si, offset BackGround
-        mov cx, 0Fh 
-
-llBGwholeLoop:
-
-        push cx 
-        mov cx, 1AH
-
-llBGlineLoop:
-        mov ax, es:[di] 
-        mov cs:[si], ax 
-        inc di
-loop llBGlineLoop
-
-        pop cx 
-        add di, 41h
-
-
-loop llBGwholeLoop
-
-        ; old BG saved
-
-
-        mov di, cs:[FramePosition]
-
         ;
 
         mov bx, offset FrameStyle
@@ -345,6 +316,46 @@ llToggleTable:
         cmp cs:[new08ofs], offset New08body
         je llTableOn
 
+        push si
+        push cx
+        push di
+        push es 
+
+        ; SAVING OLD SCENERY: 
+
+        mov di, VIDEOSEG 
+        mov es, di 
+        mov di, cs:[FramePosition]
+        mov si, offset BackGround
+        mov cx, 0Fh 
+
+llBGwholeLoop:
+
+        push cx 
+        mov cx, 18H
+
+llBGlineLoop:
+        mov ax, es:[di] 
+        mov cs:[si], ax 
+        inc di
+        inc si
+loop llBGlineLoop
+
+        pop cx 
+        add di, 88h
+
+
+loop llBGwholeLoop
+
+        ; old BG saved
+        pop es
+        pop di 
+        pop cx 
+        pop si
+
+
+
+        mov di, cs:[FramePosition]
         mov cs:[new08ofs], offset New08body
         ;mov cs:[new08seg], cs
 
@@ -357,11 +368,55 @@ llTableOn:
         mov cs:[new08ofs], offset ChainOldISR08
         ;call PaintItBlack 
         pop ax 
+
+        call RestoreBG
+
         jmp ChainOldISR09
 
 endp 
 
-PaintItBlack proc ; TODOOOOOOOOOOo
+RestoreBG proc ; TODOOOOOOOOOOo
+
+        push bx 
+        push es 
+        push di 
+        push si 
+        push cx 
+
+        mov di, VIDEOSEG
+        mov es, di 
+        mov di, cs:[FramePosition]
+
+        mov si, offset BackGround
+
+
+        mov cx, 0Fh 
+
+llBGwholeLoop:
+
+        push cx 
+        mov cx, 18H 
+
+llBGlineLoop:
+        mov ax, cs:[si] 
+        mov es:[di], ax 
+        inc si 
+        inc di 
+loop llBGlineLoop
+
+        pop cx 
+        add di, 88h
+
+
+loop llBGwholeLoop
+
+        pop cx 
+        pop si 
+        pop di 
+        pop es 
+        pop bx
+
+
 ret 
 endp 
 
