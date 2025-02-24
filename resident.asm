@@ -287,7 +287,23 @@ New09 proc
         cmp al, LSHIFT
         je llSecondKeyOn
 
+        cmp al, CTRL
+        je llCtrlOn
+
+        cmp al, CTRLrel
+        je llCtrlOff
+
+        cmp cs:[ToggleMovement], 1h
+        je llLookArrows
+
         mov cs:[ToggleSequence], 0h
+
+        pop ax
+
+        jmp ChainOldISR09
+
+llCtrlOn: 
+        mov cs:[ToggleMovement], 1h
 
         pop ax
 
@@ -311,47 +327,62 @@ llSecondKeyOn:
 
        jmp ChainOldISR09
 
+llCtrlOff:
+        mov cs:[ToggleMovement], 0h
+
+        pop ax
+
+        jmp ChainOldISR09
+
+llLookArrows: 
+        cmp al, ARROWUP
+        je llArrowUp
+
+        cmp al, ARROWDOWN
+        je llArrowDown
+
+        cmp al, ARROWLEFT
+        je llArrowLeft
+
+        cmp al, ARROWRIGHT
+        je llArrowRight
+
+
+llStopLookingArrows:
+        pop ax
+
+        jmp ChainOldISR09
+
+llArrowUp:
+        call RestoreBG
+        sub cs:[FramePosition], 0A0h
+        call SaveOldBG
+        jmp llStopLookingArrows
+
+llArrowDown:
+        call RestoreBG
+        add cs:[FramePosition], 0A0h
+        call SaveOldBG
+        jmp llStopLookingArrows
+
+llArrowLeft: 
+        call RestoreBG
+        sub cs:[FramePosition], 2h
+        call SaveOldBG
+        jmp llStopLookingArrows
+
+llArrowRight:
+        call RestoreBG
+        add cs:[FramePosition], 2h
+        call SaveOldBG
+        jmp llStopLookingArrows
+
 llToggleTable: 
 
         cmp cs:[new08ofs], offset New08body
         je llTableOn
 
-        push si
-        push cx
-        push di
-        push es 
-
-        ; SAVING OLD SCENERY: 
-
-        mov di, VIDEOSEG 
-        mov es, di 
-        mov di, cs:[FramePosition]
-        mov si, offset BackGround
-        mov cx, 0Fh 
-
-llBGwholeLoop:
-
-        push cx 
-        mov cx, 18H
-
-llBGlineLoop:
-        mov ax, es:[di] 
-        mov cs:[si], ax 
-        inc di
-        inc si
-loop llBGlineLoop
-
-        pop cx 
-        add di, 88h
-
-
-loop llBGwholeLoop
-
-        ; old BG saved
-        pop es
-        pop di 
-        pop cx 
-        pop si
+        call SaveOldBG
 
 
 
@@ -420,6 +451,47 @@ loop llBGwholeLoop
 ret 
 endp 
 
+SaveOldBG proc 
+        ; SAVING OLD SCENERY: 
+
+        push si
+        push cx
+        push di
+        push es 
+
+        mov di, VIDEOSEG 
+        mov es, di 
+        mov di, cs:[FramePosition]
+        mov si, offset BackGround
+        mov cx, 0Fh 
+
+llBGwholeLoop:
+
+        push cx 
+        mov cx, 18H
+
+llBGlineLoop:
+        mov ax, es:[di] 
+        mov cs:[si], ax 
+        inc di
+        inc si
+loop llBGlineLoop
+
+        pop cx 
+        add di, 88h
+
+
+loop llBGwholeLoop
+
+        pop es
+        pop di 
+        pop cx 
+        pop si
+
+        ; old BG saved
+
+ret
+endp 
 
 ChainOldISR08:
 
@@ -445,7 +517,7 @@ FrameStyle db '/-\| |\_/Z'
 
 LineLength equ 0Bh
 
-NextLine equ 86h
+NextLine   equ 86h
 
 HexDigitBitMask equ 00001111b
 
@@ -466,10 +538,19 @@ DIval dw 0h
 IPval dw 0h
 
 ; Scan-codes: 
-RSHIFT equ 36h 
-LSHIFT equ 2ah
+RSHIFT  equ 36h 
+LSHIFT  equ 2ah
+CTRL    equ 1dh
+CTRLrel equ 9dh
+
+ARROWUP    equ 48h 
+ARROWRIGHT equ 4dh
+ARROWLEFT  equ 4bh
+ARROWDOWN  equ 50h
 
 ToggleSequence db 0h
+
+ToggleMovement db 0h
 
 Registers db 'AX = 0000 BX = 0000 CX = 0000 DX = 0000 CS = 0000 DS = 0000 ES = 0000 SS = 0000 SP = 0000 BP = 0000 SI = 0000 DI = 0000 IP = 0000'
 
