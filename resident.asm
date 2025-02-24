@@ -311,7 +311,12 @@ New09 proc
         in al, 60h              ; input from keyboard (port 60)
         
         cmp al, RSHIFT             ; SHIFT(R)
-        je llToggleTable
+        je llFirstKeyOn
+
+        cmp al, LSHIFT
+        je llSecondKeyOn
+
+        mov cs:[ToggleSequence], 0h
 
         pop ax
 
@@ -319,6 +324,20 @@ New09 proc
 
 llFirstKeyOn:
        mov cs:[ToggleSequence], 1h  
+       cmp cs:[ToggleSequence], 3h
+       je llToggleTable
+
+       pop ax
+
+       jmp ChainOldISR09
+
+llSecondKeyOn:
+       add cs:[ToggleSequence], 2h  
+       cmp cs:[ToggleSequence], 3h
+       je llToggleTable
+
+       pop ax
+
        jmp ChainOldISR09
 
 llToggleTable: 
