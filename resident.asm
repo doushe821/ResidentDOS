@@ -18,10 +18,6 @@ main:
         mov ax, es:[bx+2] ; old ISR: C1:19A4
         mov old09seg, ax  ;
 
-        xor ax, ax 
-        mov es, ax 
-        mov bx, 09h*4
-
         cli
         mov es:[bx], offset New09
         push cs
@@ -50,11 +46,6 @@ main:
         mov new08ofs, offset ChainOldISR08
         mov new08seg, cs
 
-
-        xor ax, ax 
-        mov es, ax 
-        mov bx, 08h*4
-
         cli
         mov es:[bx], offset New08
         push cs
@@ -72,15 +63,14 @@ main:
 
 New08 proc 
 
-        push es 
-        push di 
-        mov di, VIDEOSEG
-        mov es, di
-        xor di, di 
-        mov byte ptr es:[di], '!'
-
-        pop di 
-        pop es
+        ;push es 
+        ;push di 
+        ;mov di, VIDEOSEG
+        ;mov es, di
+        ;xor di, di 
+        ;mov byte ptr es:[di], '!'
+        ;pop di 
+        ;pop es
 
         jmp ChainNewISR08
 endp
@@ -88,31 +78,88 @@ endp
 
 New08body:
 
-        push es 
-        push di 
-        mov di, VIDEOSEG
-        mov es, di
-        xor di, di 
-        mov byte ptr es:[di+6], '!'
-        pop di 
-        pop es
 
-        push dx
-        push cx
-        push bx         ; debug
-        push dx 
-        mov dx, offset New08body
-        mov ah, 2h
-        int 21h 
-        pop dx
-        ; debug
+        ;l:10010001 h:11110000 
+
+        mov cs:[AXval], ax
+        pop ax 
+        mov cs:[IPval], ax 
+        pop ax 
+        mov cs:[CSval], ax 
         push ax 
-        push di
-        push es 
+        mov ax, cs:[IPval]
+        push ax
+        mov ax, cs:[AXval]
+
+        mov cs:[BXval], bx ;
+        mov cs:[CXval], cx ;
+        mov cs:[DXval], dx ;
+        mov cs:[ESval], es 
+        mov cs:[DIval], di 
+        mov cs:[SIval], si 
+        mov cs:[SPval], sp
+        mov cs:[DSval], ds 
+        mov cs:[SSval], ss
+        mov cs:[BPval], bp      
+
+        push dx 
+        push cx 
+        push bx 
+        push ax 
+        push di 
+        push si 
+        push es
+
+        mov si, offset AXval
+        mov di, offset Registers - 1h
+
+        mov cx, 0Dh
+
+
+llPrintValues:                                                                                                                                                                                                                                          
+
+        add di, 6h
+        mov ax, cs:[si]
+        call itoaHEX
+        add si, 2h
+
+loop llPrintValues
+
+
 
         mov di, VIDEOSEG
         mov es, di 
-        mov di, 2*50h*5+5ah
+        mov di, cs:[FramePosition]
+
+
+        ; SAVING OLD SCENERY: 
+
+        mov si, offset BackGround
+        mov cx, 0Fh 
+
+llBGwholeLoop:
+
+        push cx 
+        mov cx, 1AH
+
+llBGlineLoop:
+        mov ax, es:[di] 
+        mov cs:[si], ax 
+        inc di
+loop llBGlineLoop
+
+        pop cx 
+        add di, 41h
+
+
+loop llBGwholeLoop
+
+        ; old BG saved
+
+
+        mov di, cs:[FramePosition]
+
+        ;
 
         mov bx, offset FrameStyle
         add bx, 9h
@@ -153,40 +200,20 @@ llPrintingRegisters:
 
         ; regname
         push bx
+        push cx 
+        mov cx, 9h
 
+llRegLine:
         mov bx, dx 
         mov al, byte ptr cs:[bx]
         stosw 
 
         inc dx
-
-        mov bx, dx 
-        mov al, byte ptr cs:[bx]
-        stosw
-
-        add dx, 2h
-
+loop llRegLine
+        pop cx
         pop bx
-        ; regname
 
-        
-        mov al, byte ptr cs:[bx]
-        stosw 
-
-        mov al, '='
-        stosw 
-        mov al, byte ptr cs:[bx]
-        stosw
-        
-
-        ; regval
-        mov al, '0'
-        stosw 
-        stosw 
-        stosw 
-        stosw
-        ; regval 
-
+        inc dx
 
         mov al, byte ptr cs:[bx]
         stosw 
@@ -218,6 +245,7 @@ loop llBotInline
         stosw
 
         pop es 
+        pop si
         pop di 
         pop ax 
         pop bx
@@ -227,69 +255,105 @@ loop llBotInline
         jmp ChainOldISR08
 
 
+;/// FUNCTION ///
+;
+; Entry: AX, DI 
+;
+; Destr: ax, dx
+;/// START ///
+
+
+itoaHEX proc 
+
+        push cx 
+        mov cx, 4h
+
+        add di, 3h
+
+        mov dx, ax 
+        llOop:
+
+        and al, HexDigitBitMask
+        cmp al, 09h
+        jbe llPrintNum 
+        jmp llPrintLit
+
+        llBack:
+        dec di 
+        shr dx, 4h
+        mov ax, dx
+        loop llOop
+
+        pop cx
+        add di, 5h
+        ret
+
+llPrintNum: 
+        add al, 30h ; zero ascii
+        mov cs:[di], al
+        jmp llBack
+
+llPrintLit: 
+        sub al, 0Ah
+        add al, 41h ; A ascii
+        mov cs:[di], al
+        jmp llBack
+endp
+
+
+;/// END ///
+
 
 New09 proc
 
         push ax
-        
-        
 
         in al, 60h              ; input from keyboard (port 60)
         
-        cmp al, 36h             ; SHIFT(R)
-        je llTableOn
-
-        ;stosw                   ; ax -> es:di (SIGMA word) ((skibidi))
-
-        ;in al, 61h
-        ;mov ah, al 
-        ;or al, 80h
-        ;out 61h, al 
-        ;mov al, ah 
-        ;out 61h, al             ; boobs
+        cmp al, RSHIFT             ; SHIFT(R)
+        je llToggleTable
 
         pop ax
 
         jmp ChainOldISR09
 
-llTableOn: 
+llFirstKeyOn:
+       mov cs:[ToggleSequence], 1h  
+       jmp ChainOldISR09
 
-        mov new08ofs, offset New08body
-        ;mov new08seg, cs
+llToggleTable: 
+
+        cmp cs:[new08ofs], offset New08body
+        je llTableOn
+
+        mov cs:[new08ofs], offset New08body
+        ;mov cs:[new08seg], cs
 
         pop ax  
 
         jmp ChainOldISR09
 
+llTableOn:
+
+        mov cs:[new08ofs], offset ChainOldISR08
+        ;call PaintItBlack 
+        pop ax 
+        jmp ChainOldISR09
+
+endp 
+
+PaintItBlack proc ; TODOOOOOOOOOOo
+ret 
 endp 
 
 
 ChainOldISR08:
-        push es 
-        push di 
-        mov di, VIDEOSEG
-        mov es, di
-        xor di, di 
-        mov byte ptr es:[di+4], ' '
-
-        pop di 
-        pop es
 
                  db 0eah ; jmp
         old08ofs dw 0
         old08seg dw 0
 
 ChainNewISR08:
-        push es 
-        push di 
-        mov di, VIDEOSEG
-        mov es, di
-        xor di, di 
-        mov byte ptr es:[di+4], '!'
-
-        pop di 
-        pop es
-
 
                  db 0eah ; jmp
         new08ofs dw 0 
@@ -301,15 +365,43 @@ ChainOldISR09:
         old09seg dw 0
 
 
-FramePosition dw 5*50h*2+5ah
+FramePosition dw 3*50h*2+86h
+
 FrameStyle db '/-\| |\_/Z'
 
 LineLength equ 0Bh
 
 NextLine equ 86h
 
+HexDigitBitMask equ 00001111b
+
 RegistersNumber equ 0Dh
+
+AXval dw 0h 
+BXval dw 0h 
+CXval dw 0h 
+DXval dw 0h 
+CSval dw 0h
+DSval dw 0h
+ESval dw 0h
+SSval dw 0h
+SPval dw 0h 
+BPval dw 0h 
+SIval dw 0h 
+DIval dw 0h 
+IPval dw 0h
+
+; Scan-codes: 
+RSHIFT equ 36h 
+LSHIFT equ 2ah
+
+ToggleSequence db 0h
+
 Registers db 'AX = 0000 BX = 0000 CX = 0000 DX = 0000 CS = 0000 DS = 0000 ES = 0000 SS = 0000 SP = 0000 BP = 0000 SI = 0000 DI = 0000 IP = 0000'
+
+BackGround db 13*2*15*2 dup(0)
+
+
 ResidentProgramEnd:
 end main
 
